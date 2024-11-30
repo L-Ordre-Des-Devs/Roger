@@ -1,0 +1,26 @@
+{
+  "name": "Roger",
+  "version": "1.0.0",
+  "description": "A CTF Discord bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --trace-deprecation -r dotenv/config index.js",
+    "test": "nodemon index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/L-Ordre-Des-Devs/Roger.git"
+  },
+  "author": "Ordre des Devs",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/L-Ordre-Des-Devs/Roger/issues"
+  },
+  "homepage": "https://github.com/L-Ordre-Des-Devs/Roger#readme",
+  "dependencies": {
+    "@notionhq/client": "^0.4.13",
+    "discord.js": "^14.15.3",
+    "dotenv": "^10.0.0",
+    "glob": "^11.0.0"
+  }
+}
