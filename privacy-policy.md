@@ -50,6 +50,6 @@ Cette Politique de Confidentialité décrit comment le bot Discord nommé Roger 
 
    Cette Politique peut être modifiée à tout moment pour refléter les évolutions du Bot ou des lois applicables. Les utilisateurs seront informés des modifications importantes via une notification sur [le serveur support](https://discord.gg/tDWF64AYkW).
 
-11. Contact
+10. Contact
 
-   Pour toute question ou demande concernant cette Politique de Confidentialité, veuillez contacter [le staff sur le serveur support](https://discord.gg/tDWF64AYkW).
+    Pour toute question ou demande concernant cette Politique de Confidentialité, veuillez contacter [le staff sur le serveur support](https://discord.gg/tDWF64AYkW).
