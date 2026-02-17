@@ -1,4 +1,5 @@
 /*
+ * edited : Syxles (Syxless)
  * author : Mizari (Mizari-Dev)
  */
 const { EmbedBuilder, ApplicationCommandType, ApplicationCommandOptionType, ChannelType, PermissionsBitField, resolveColor } = require('discord.js');
@@ -102,7 +103,7 @@ module.exports = {
           locale: locale
         });
         break;
-      case "info":
+      case "infos":
         Informations({
           client: client,
           interaction: interaction,

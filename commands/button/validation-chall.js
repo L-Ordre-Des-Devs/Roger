@@ -1,7 +1,9 @@
 /*
+ * edited : Syxles (Syxless)
  * author : Mizari (Mizari-W)
  */
 const { ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
+const colors = require("../../functions/colors.js");
 
 module.exports = {
   name: "validation_btn",
@@ -11,11 +13,11 @@ module.exports = {
    * @param {Client} client
    * @param {CommandInteraction} interaction
    */
-  run: async(client, interaction) => {
-    const { channel, locale, user } = interaction;
+  run: async (client, interaction) => {
+    const { locale } = interaction;
 
-    // Create modal
-    let modal = new ModalBuilder({
+    // Show the modal immediately to stay within Discord's 3s response window.
+    const modal = new ModalBuilder({
       title: "Challenge Validation",
       customId: "validation_modal",
       components: [
@@ -33,80 +35,19 @@ module.exports = {
       ]
     });
 
-    // Get challenge in DB
-    let chall_response = await client.notion.databases.query({
-      database_id: process.env.CHALLENGES_DB,
-      filter: {
-        property: 'ThreadID',
-        text: {
-          contains: channel.id
-        }
-      }
-    });
-
-    // If challenge found
-    if (chall_response.results.length > 0){
-      // If player is chall author and no first blood yet, exit
-      if (channel.ownerId === user.id){
-        let page = chall_response.results[0];
-        if (page.properties["FirstBlood"].relation.length === 0){
-          interaction.reply({
-            content: {
-              "fr": "Veuillez attendre le first blood."
-            }[locale] || "Please wait for the First Blood",
-            ephemeral: true
-          });
-          return;
-        }
-      }
-
-      // Get member in DB
-      let member_response = await client.notion.databases.query({
-        database_id: process.env.MEMBERS_DB,
-        filter: {
-          property: 'MemberID',
-          text: {
-            contains: interaction.user.id
-          }
-        }
-      });
-
-      // If user found in DB
-      if (member_response.results.length > 0){
-        let member_page_id = member_response.results[0].id;
-        // If member is in flaggers of this challenge, exit
-        if (chall_response.results[0].properties["Flaggers"].relation.find(mem => mem.id === member_page_id)){
-          interaction.reply({
-            content: {
-              "fr": "Tu as déjà fait ce challenge."
-            }[locale] || "You already did this challenge",
-            ephemeral: true
-          });
-          return;
-        }
-      }
-
-      try {
-        // Show modal
-        interaction.showModal(modal);
-      } catch(err) {
-        interaction.reply({
-          content:{
-            "fr": "<:cross:1163970998605983848> Quelque chose s'est mal passé..."
+    try {
+      await interaction.showModal(modal);
+    } catch (err) {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: {
+            fr: "<:cross:1163970998605983848> Quelque chose s'est mal passe..."
           }[locale] || "<:cross:1163970998605983848> Something went wrong...",
           ephemeral: true
-        });
-        //Logs
-        console.error(`[${colors.FgRed}   Error    ${colors.Reset}]\t❌ Le modal a planté ???`);
+        }).catch(() => {});
       }
-    } else {
-      // Challenge not found
-      interaction.reply({
-        content:{
-          "fr": "<:cross:1163970998605983848> Quelque chose s'est mal passé..."
-        }[locale] || "<:cross:1163970998605983848> Something went wrong..."
-      });
-      console.error(`[${colors.FgRed}   Error    ${colors.Reset}]\t❌ Pas de challenge dans la DB... id : ${channel.id}`);
+
+      console.error(`[${colors.FgRed}   Error    ${colors.Reset}]\tFlag modal display failed`, err);
     }
   }
-}
+};

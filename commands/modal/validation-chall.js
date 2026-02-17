@@ -1,8 +1,9 @@
 /*
+ * edited : Syxles (Syxless)
  * author : Mizari (Mizari-W)
  */
-const colors = require('../../functions/colors.js');
-const { createHash } = require('node:crypto');
+const colors = require("../../functions/colors.js");
+const { createHash } = require("node:crypto");
 
 module.exports = {
   name: "validation_modal",
@@ -12,228 +13,259 @@ module.exports = {
    * @param {Client} client
    * @param {CommandInteraction} interaction
    */
-  run: async(client, interaction) => {
-    const { components, channel, locale, message, user, guild } = interaction;
-    await interaction.deferReply({ ephemeral: true }).catch(err => console.error(`[${colors.FgRed}   Error    ${colors.Reset}]\t❌ `+err));
-    // Get player answare
-    var user_flag = components[0].components[0].value;
-    user_flag = createHash('sha256').update(user_flag).digest('hex');
+  run: async (client, interaction) => {
+    const { channel, locale, message, user, guild } = interaction;
 
-    // Get challenge from DB
-    var chall_response = await client.notion.databases.query({
-      database_id: process.env.CHALLENGES_DB,
-      filter: {
-        property: 'ThreadID',
-        text: {
-          contains: channel.id
-        }
-      }
+    await interaction.deferReply({ ephemeral: true }).catch((err) => {
+      console.error(`[${colors.FgRed}   Error    ${colors.Reset}]\tFailed to defer validation modal`, err);
     });
 
-    if (chall_response.results.length > 0){
-      // Get flag from DB
-      const chall_properties = chall_response.results[0].properties;
-      const flag = chall_properties["Flag"].rich_text[0].plain_text;
+    try {
+      const userFlag = createHash("sha256")
+        .update(interaction.fields.getTextInputValue("flag"))
+        .digest("hex");
 
-      // If player found the right flag
-      if (user_flag === flag){
-        // Get challenge score
-        let score = chall_properties["Points"].number;
-        // Get challenge first blood
-        let first_blood = chall_properties["FirstBlood"].relation;
-
-        // Prepare congrate message
-        let congrate_message = {
-          "fr": `Bravo ! Vous gagnez ${score} points ! 🥳`
-        }[locale] || `Good job! You win ${score} points from this challenge! 🥳`
-
-        // If no first blood
-        if (first_blood.length===0){
-          congrate_message += {
-            "fr": " Et vous l'avez firstblood 😱"
-          }[locale] || " And firstblooded the challenge 😱";
-          first_blood = user.id;
-        } else {
-          let first_response = await client.notion.pages.retrieve({ page_id: first_blood[0].id });
-          first_blood = first_response.properties["MemberID"].rich_text[0].plain_text;
-        }
-
-        // Send congratulations
-        await interaction.followUp({ content: congrate_message });
-
-        // Get challenge embed from Discord
-        let embed = message.embeds[0]
-
-        // Change validations value
-        embed.data.fields[1].value = `${chall_properties["Flaggers"].relation.length+1}`;
-        // Change first blooder
-        embed.data.fields[3].value = "<@"+first_blood+">"
-        // Change last flagger value
-        embed.data.fields[4].value = "<@"+user.id+">";
-
-        // Send embed and components
-        message.edit({ embeds: [embed], components: message.components });
-
-        // Get member in DB
-        let member_response = await client.notion.databases.query({
-          database_id: process.env.MEMBERS_DB,
-          filter: {
-            property: 'MemberID',
-            text: {
-              contains: user.id
-            }
+      // find challenge in db
+      const challResponse = await client.notion.databases.query({
+        database_id: process.env.CHALLENGES_DB,
+        filter: {
+          property: "ThreadID",
+          text: {
+            contains: channel.id
           }
-        });
+        }
+      });
 
-        // If not in DB
-        if (member_response.results.length === 0){
-          // Create member in DB
-          member_response = await client.notion.pages.create({
-            parent: {
-              database_id: process.env.MEMBERS_DB
-            },
-            properties: {
-              "MemberName": {
-                title: [
-                  {
-                    text: {
-                      content: user.username
-                    }
-                  }
-                ]
-              },
-              "MemberID": {
-                rich_text: [
-                  {
-                    text: {
-                      content: user.id
-                    }
-                  }
-                ]
-              }
-            }
+      if (challResponse.results.length === 0) {
+        await interaction.followUp({
+          content: {
+            fr: "<:cross:1163970998605983848> Quelque chose s'est mal passe..."
+          }[locale] || "<:cross:1163970998605983848> Something went wrong..."
+        });
+        return;
+      }
+
+      const challPage = challResponse.results[0];
+      const challProperties = challPage.properties;
+
+      if (channel.ownerId === user.id && challProperties["FirstBlood"].relation.length === 0) {
+        await interaction.followUp({
+          content: {
+            fr: "Veuillez attendre le first blood."
+          }[locale] || "Please wait for the First Blood"
+        });
+        return;
+      }
+
+      // block duplicate validations
+      let memberResponse = await client.notion.databases.query({
+        database_id: process.env.MEMBERS_DB,
+        filter: {
+          property: "MemberID",
+          text: {
+            contains: user.id
+          }
+        }
+      });
+
+      if (memberResponse.results.length > 0) {
+        const memberPageId = memberResponse.results[0].id;
+        if (challProperties["Flaggers"].relation.find((mem) => mem.id === memberPageId)) {
+          await interaction.followUp({
+            content: {
+              fr: "Tu as deja fait ce challenge."
+            }[locale] || "You already did this challenge"
           });
-        } else {
-          member_response = member_response.results[0];
+          return;
         }
+      }
 
-        // Get guild in DB
-        let guild_response = await client.notion.databases.query({
-          database_id: process.env.GUILDS_DB,
-          filter: {
-            property: "GuildID",
-            rich_text: {
-              contains: guild.id
-            }
-          }
+      const flag = challProperties["Flag"].rich_text[0]?.plain_text;
+      if (!flag || userFlag !== flag) {
+        await interaction.followUp({
+          content: {
+            fr: "Ce n'est pas le bon flag... reessayez !"
+          }[locale] || "It's not the good flag... try again!"
         });
+        return;
+      }
 
-        // Get score page in relation with the member AND the guild
-        let score_member_response = await client.notion.databases.query({
-          database_id: process.env.SCORES_DB,
-          filter: {
-            and: [
-              {
-                property: 'Member',
-                relation: {
-                  contains: member_response.id
-                }
-              },
-              {
-                property: "Guild",
-                relation: {
-                  contains: guild_response.results[0].id
-                }
-              }
-            ]
-          }
-        });
-        
-        // If no score yet, create it
-        if (score_member_response.results.length === 0){
-          score_member_response = await client.notion.pages.create({
-            parent: {
-              database_id: process.env.SCORES_DB
-            },
-            properties: {
-              "RELATION": {
-                title: [
-                  {
-                    text: {
-                      content: user.username + "/" + guild.name
-                    }
-                  }
-                ]
-              },
-              "Member": {
-                relation: [
-                  {
-                    id: member_response.id
-                  }
-                ]
-              },
-              "Guild": {
-                relation: [
-                  {
-                    id: guild_response.results[0].id
-                  }
-                ]
-              }
-            }
-          });
-        } else {
-          score_member_response = score_member_response.results[0];
-        }
-        
-        const { properties } = score_member_response;
-        const all_challenges = properties["Challenges"].relation;
-        all_challenges.push({ id: chall_response.results[0].id })
+      // score and first blood
+      const score = challProperties["Points"].number;
+      let firstBloodRelation = challProperties["FirstBlood"].relation;
+      let firstBloodUserId = user.id;
 
-        // Update score
-        await client.notion.pages.update({
-          page_id: score_member_response.id,
+      let congrateMessage = {
+        fr: `Bravo ! Vous gagnez ${score} points !`
+      }[locale] || `Good job! You win ${score} points from this challenge!`;
+
+      if (firstBloodRelation.length === 0) {
+        congrateMessage += {
+          fr: " Et vous l'avez firstblood."
+        }[locale] || " And firstblooded the challenge.";
+      } else {
+        const firstResponse = await client.notion.pages.retrieve({ page_id: firstBloodRelation[0].id });
+        firstBloodUserId = firstResponse.properties["MemberID"].rich_text[0].plain_text;
+      }
+
+      await interaction.followUp({ content: congrateMessage });
+
+      // update challenge embed
+      if (message?.embeds?.length) {
+        const embed = message.embeds[0];
+        embed.data.fields[1].value = `${challProperties["Flaggers"].relation.length + 1}`;
+        embed.data.fields[3].value = `<@${firstBloodUserId}>`;
+        embed.data.fields[4].value = `<@${user.id}>`;
+        await message.edit({ embeds: [embed], components: message.components }).catch(() => {});
+      }
+
+      // create member if missing
+      if (memberResponse.results.length === 0) {
+        memberResponse = await client.notion.pages.create({
+          parent: {
+            database_id: process.env.MEMBERS_DB
+          },
           properties: {
-            "Challenges": {
-              relation: all_challenges
-            }
-          }
-        });
-
-        // Update challenge in DB
-        chall_properties["Flaggers"].relation.push({
-          id: member_response.id
-        });
-        if (chall_properties["FirstBlood"].relation.length === 0){
-          chall_properties["FirstBlood"].relation = [
-            {
-              id: member_response.id
-            }
-          ]
-        }
-        await client.notion.pages.update({
-          page_id: chall_response.results[0].id,
-          properties: {
-            "FirstBlood": {
-              relation: chall_properties["FirstBlood"].relation
+            MemberName: {
+              title: [
+                {
+                  text: {
+                    content: user.username
+                  }
+                }
+              ]
             },
-            "Flaggers": {
-              relation: chall_properties["Flaggers"].relation
+            MemberID: {
+              rich_text: [
+                {
+                  text: {
+                    content: user.id
+                  }
+                }
+              ]
             }
           }
         });
       } else {
-        await interaction.followUp({
-          content: {
-            "fr": "Ce n'est pas le bon flag... réessayez !"
-          }[locale] || "It's not the good flag... try again!"
-        });
+        memberResponse = memberResponse.results[0];
       }
-    } else {
+
+      // find guild in db
+      const guildResponse = await client.notion.databases.query({
+        database_id: process.env.GUILDS_DB,
+        filter: {
+          property: "GuildID",
+          rich_text: {
+            contains: guild.id
+          }
+        }
+      });
+
+      if (guildResponse.results.length === 0) {
+        console.error(`[${colors.FgRed}   Error    ${colors.Reset}]\tGuild missing in DB for validation`, guild.id);
+        return;
+      }
+
+      // find member guild score page
+      let scoreMemberResponse = await client.notion.databases.query({
+        database_id: process.env.SCORES_DB,
+        filter: {
+          and: [
+            {
+              property: "Member",
+              relation: {
+                contains: memberResponse.id
+              }
+            },
+            {
+              property: "Guild",
+              relation: {
+                contains: guildResponse.results[0].id
+              }
+            }
+          ]
+        }
+      });
+
+      // create score page if missing
+      if (scoreMemberResponse.results.length === 0) {
+        scoreMemberResponse = await client.notion.pages.create({
+          parent: {
+            database_id: process.env.SCORES_DB
+          },
+          properties: {
+            RELATION: {
+              title: [
+                {
+                  text: {
+                    content: `${user.username}/${guild.name}`
+                  }
+                }
+              ]
+            },
+            Member: {
+              relation: [
+                {
+                  id: memberResponse.id
+                }
+              ]
+            },
+            Guild: {
+              relation: [
+                {
+                  id: guildResponse.results[0].id
+                }
+              ]
+            }
+          }
+        });
+      } else {
+        scoreMemberResponse = scoreMemberResponse.results[0];
+      }
+
+      const allChallenges = [...scoreMemberResponse.properties["Challenges"].relation];
+      if (!allChallenges.find((chall) => chall.id === challPage.id)) {
+        allChallenges.push({ id: challPage.id });
+      }
+
+      // update score page
+      await client.notion.pages.update({
+        page_id: scoreMemberResponse.id,
+        properties: {
+          Challenges: {
+            relation: allChallenges
+          }
+        }
+      });
+
+      // update challenge page
+      const updatedFlaggers = [...challProperties["Flaggers"].relation];
+      if (!updatedFlaggers.find((mem) => mem.id === memberResponse.id)) {
+        updatedFlaggers.push({ id: memberResponse.id });
+      }
+
+      if (firstBloodRelation.length === 0) {
+        firstBloodRelation = [{ id: memberResponse.id }];
+      }
+
+      await client.notion.pages.update({
+        page_id: challPage.id,
+        properties: {
+          FirstBlood: {
+            relation: firstBloodRelation
+          },
+          Flaggers: {
+            relation: updatedFlaggers
+          }
+        }
+      });
+    } catch (err) {
+      console.error(`[${colors.FgRed}   Error    ${colors.Reset}]\tValidation modal failed`, err);
       await interaction.followUp({
         content: {
-          "fr": "<:cross:1163970998605983848> Quelque chose s'est mal passé..."
+          fr: "<:cross:1163970998605983848> Quelque chose s'est mal passe..."
         }[locale] || "<:cross:1163970998605983848> Something went wrong..."
-      });
+      }).catch(() => {});
     }
   }
-}
+};
